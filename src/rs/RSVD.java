@@ -1,12 +1,9 @@
 package rs;
 
 import java.io.*;
-import java.net.Inet4Address;
 import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.function.IntPredicate;
 
 /**
  * Created by xlc on 2015/4/10.
@@ -15,13 +12,16 @@ public class RSVD {
     //  userItems = (user, item, rating), itemUsers = (item,user, rating)
     public static Map<Integer, Map<Integer, Integer>>userItems = new HashMap<Integer,Map<Integer, Integer>>();
     public static Map<Integer, Map<Integer, Integer>>itemUsers = new HashMap<Integer, Map<Integer, Integer>>();
-    static final int d = 50, T = 100;
+    static final int d = 70, T = 100;
     //  n = users, m = items
     static final int n = 943, m = 1682;
     public static float[] userBias = new float[n];
     public static float[] itemBias = new float[m];
     public static float[][] matrixU = new float[n][d];
     public static float[][] matrixV = new float[m][d];
+    public static int[] userArr;
+    public static int[] itemArr;
+    public static int[] ratingArr;
     int recordNum = 0, ratingSum = 0;
     float globalAver;
 
@@ -52,19 +52,28 @@ public class RSVD {
                 recordNum++;
                 ratingSum += userIntegers[2];
             }
+            reader.close();
             //  end of reading file
-            
+
             globalAver = (float)ratingSum / recordNum;
+            userArr = new int[recordNum];
+            itemArr = new int[recordNum];
+            ratingArr = new int[recordNum];
             //  get user bias
             double numeratorUserBias;
+            int index = 0;
             for( Map.Entry<Integer, Map<Integer, Integer>> e : userItems.entrySet()){
                 numeratorUserBias = 0.0;
-              
+
                 for(Map.Entry<Integer, Integer> ee : e.getValue().entrySet()){
                     numeratorUserBias += Integer.valueOf(ee.getValue()) - globalAver;
+                    userArr[index] = e.getKey();
+            		itemArr[index] = ee.getKey();
+            		ratingArr[index] = ee.getValue();
+            		++index;
                 }
                 userBias[e.getKey() - 1] = (float) (numeratorUserBias / e.getValue().size());
-              
+
                 //  initialize matrix user
                 for(int k=0; k<d; ++k){
                     matrixU[e.getKey() - 1][k] = (float) ((float) (Math.random() - 0.5) * 0.01);
@@ -75,12 +84,12 @@ public class RSVD {
             double numeratorItemBias;
             for(Map.Entry<Integer, Map<Integer, Integer>> e : itemUsers.entrySet()){
                 numeratorItemBias = 0.0;
-               
+
                 for(Map.Entry<Integer, Integer> ee : e.getValue().entrySet()){
                     numeratorItemBias += Integer.valueOf(ee.getValue()) - globalAver;
                 }
                 itemBias[e.getKey() - 1] = (float) (numeratorItemBias / e.getValue().size());
-                
+
                 //  initialize matrix item
                 for(int k=0; k<d; ++k){
                     matrixV[e.getKey() - 1][k] = (float) ((float) (Math.random() - 0.5) * 0.01);
@@ -94,47 +103,9 @@ public class RSVD {
     }
 
     void doMainJob(String trainFile){
+
         double gamma = 0.01;
         double alphaU = 0.01, alphaV = 0.01, betaU = 0.01, betaV = 0.01;
-
-        int[] userArr = new int[recordNum];
-        int[] itemArr = new int[recordNum];
-        int[] ratingArr = new int[recordNum];
-        int index = 0;
-//        //  get random array
-//        try {
-//            BufferedReader reader = new BufferedReader(new FileReader(new File(trainFile)));
-//            String lineString;
-//            String[] userStrings;
-//            Integer[] userIntegers;
-//            try {
-//                while((lineString = reader.readLine()) != null){
-//                    userStrings = lineString.split("[^0-9]");
-//                    userIntegers = new Integer[userStrings.length - 1];
-//                    for(int i=0; i<userIntegers.length; ++i){
-//                        userIntegers[i] = Integer.valueOf(userStrings[i]);
-//                    }
-//                    userArr[index] = userIntegers[0];
-//                    itemArr[index] = userIntegers[1];
-//                    ratingArr[index] = userIntegers[2];
-//                    index++;
-//                }
-//            } catch (IOException e1) {
-//                
-//                e1.printStackTrace();
-//            }
-//        } catch (FileNotFoundException e1) {
-//            
-//            e1.printStackTrace();
-//        }
-        for( Entry<Integer, Map<Integer, Integer>> e : userItems.entrySet()){
-        	for( Entry<Integer, Integer> ee : e.getValue().entrySet()){
-        		userArr[index] = e.getKey();
-        		itemArr[index] = ee.getKey();
-        		ratingArr[index] = ee.getValue();
-        		++index;
-        	}
-        }
 
         for(int i=0; i<T; ++i){
             for(int j=0; j<recordNum; ++j){
@@ -240,7 +211,7 @@ public class RSVD {
         }
     }
 
-   
+
     public static void main(String[] args){
         RSVD test = new RSVD();
         System.out.println("RSVD:");
