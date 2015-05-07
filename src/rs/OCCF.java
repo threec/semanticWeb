@@ -5,12 +5,9 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.PriorityQueue;
-import java.util.Queue;
 import java.util.TreeMap;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -22,13 +19,8 @@ public class OCCF {
 	// (item, item, similarity)
 	public static Map<Integer, Map<Integer, Float>> itemSimilarity = new HashMap<>();
 	public static Map<Integer, Map<Float, Integer>>itemTopK = new HashMap<>();
-	public static Map<Integer, Map<Integer, Float>>ratingHat = new HashMap<>();
-	final int k = 50;
-	private Comparator<Float> cmp = new Comparator<Float>() {
-        public int compare(Float e1, Float e2) {
-            return  e1.compareTo(e2);  //  浮点数要调用该函数，自己实现出错,  10 9 8 7 6
-        }
-    };
+	public static Map<Integer, Map<Float, Integer>>ratingHat = new HashMap<>();
+	final int k = 5;
 
     // read train file
 	void init(String fileName){
@@ -48,7 +40,7 @@ public class OCCF {
 
 					if(!userItems.containsKey(userIntegers[0])){
 						userItems.put(userIntegers[0], new HashSet<Integer>());
-						ratingHat.put(userIntegers[0], new HashMap<Integer, Float>());
+						ratingHat.put(userIntegers[0], new TreeMap<Float, Integer>());
 					}
 					userItems.get(userIntegers[0]).add(userIntegers[1]);
 
@@ -60,11 +52,11 @@ public class OCCF {
 				}
 				reader.close();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
+				
 				e.printStackTrace();
 			}
 		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
+			
 			e.printStackTrace();
 		}
 	}
@@ -156,10 +148,12 @@ public class OCCF {
 
 	void itemBaseOCCF(){
 		for(Entry<Integer, Set<Integer>> e : userItems.entrySet()){
+			//  user对应的item集合
 			Set<Integer>userItemSet = e.getValue();
 			for(Entry<Integer, Map<Float, Integer>> ee : itemTopK.entrySet()){
-
+				//获取user对应的item集合与里面item对应的相似topk的交集
 				userItemSet.retainAll(ee.getValue().values());
+				
 				if(userItemSet.isEmpty()){
 					continue;
 				}
@@ -169,9 +163,16 @@ public class OCCF {
 				for(int i : userItemSet){
 					sum += itemSimilarity.get(i).get(ee.getKey());
 				}
-				ratingHat.get(e.getKey()).put(ee.getKey(), sum);
-
-
+				if(ratingHat.get(e.getKey()).size() < k){
+					ratingHat.get(e.getKey()).put(sum, ee.getKey());
+				}
+				else {
+					if(((TreeMap<Float, Integer>) ee.getValue()).firstEntry().getKey().compareTo(
+							((TreeMap<Float, Integer>) ratingHat.get(e.getKey())).firstEntry().getKey()) > 0){
+						((TreeMap<Float, Integer>) ratingHat.get(e.getKey())).pollFirstEntry();
+						ratingHat.get(e.getKey()).put(sum, ee.getKey());
+					}
+				}
 			}
 			/*
 			for(Entry<Integer, Float> f : ratingHat.get(e.getKey()).entrySet()){
@@ -212,10 +213,10 @@ public class OCCF {
 					//System.out.print("key;  ");
 					//System.out.print(e.getValue());
 					//System.out.println();
-					if(itemTopK.containsKey(e.getKey())){
+					if(ratingHat.containsKey(e.getKey())){
 						//System.out.println("baohan ");
 						float tempSum = 0;
-						for( Integer ee : itemTopK.get(e.getKey()).values()){
+						for( Integer ee : ratingHat.get(e.getKey()).values()){
 							if(e.getValue().contains(ee)){
 								tempSum++;
 							}
@@ -226,82 +227,15 @@ public class OCCF {
 				//System.out.println(preSum);
 				System.out.println("Pre@k : " + (float)preSum/userTest.size());
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
+				
 				e.printStackTrace();
 			}
 		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
+			
 			e.printStackTrace();
 		}
 	}
 
-	void func(){
-		Map<Integer, String>t = new TreeMap<Integer, String>();
-		t.put(12, "q");
-		t.put(4, "qa");
-		t.put(22, "qz");
-		t.put(21, "qw");
-		t.put(52, "qs");
-		t.put(29, "qx");
-		t.put(32, "qc");
-		t.put(24, "qd");
-		System.out.println(t);
-	}
-	void t(){
-		 Queue<Integer> qi = new PriorityQueue<Integer>();
-
-	        qi.add(5);
-	        qi.add(2);
-	        qi.add(1);
-	        qi.add(10);
-	        qi.add(3);
-
-	        while (!qi.isEmpty()) {
-	            System.out.print(qi.poll() + ",");
-	        }
-	        System.out.println();
-	        System.out.println("-----------------------------");
-	              // <span></span><span>自定义的比较器，可以让我们自由定义比较的顺序</span> Comparator<Integer> cmp;
-
-	        Queue<Float> q2 = new PriorityQueue<Float>(cmp);
-	        q2.add((float) 3.7);
-	        q2.add((float) 8.9);
-	        q2.add((float) 9);
-	        q2.add((float) 1.2);
-	        while (!q2.isEmpty()) {
-	            System.out.print(q2.poll() + ",");
-	        }
-	        System.out.println();
-		Set<Integer> result = new HashSet<Integer>();
-        Set<Integer> set1 = new HashSet<Integer>(){{
-            add(1);
-            add(3);
-            add(5);
-        }};
-
-        Set<Integer> set2 = new HashSet<Integer>(){{
-            add(1);
-            add(2);
-            add(3);
-        }};
-
-        result.clear();
-        System.out.println("1" + result);
-        result.addAll(set1);
-        System.out.println("2" + result);
-        result.retainAll(set2);
-        System.out.println("交集："+result);
-
-        result.clear();
-        result.addAll(set1);
-        result.removeAll(set2);
-        System.out.println("差集："+result);
-
-        result.clear();
-        result.addAll(set1);
-        result.addAll(set2);
-        System.out.println("并集："+result);
-	}
 
 	public static void main(String[] args){
 		OCCF test = new OCCF();
@@ -309,7 +243,7 @@ public class OCCF {
 		long startTime = System.currentTimeMillis();
 
 		test.init("u1.base.OCCF");
-		//test.func();
+		
 		test.getSimilarity();
 		test.selectTopK();
 		test.itemBaseOCCF();
