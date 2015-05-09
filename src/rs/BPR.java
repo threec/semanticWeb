@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.Map.Entry;
 import java.util.Set;
 
@@ -17,10 +18,15 @@ public class BPR {
 	//  userItems = (user, item, rating), itemUsers = (item,user, rating)
     public static Map<Integer, Map<Integer, Integer>>userItems = new HashMap<Integer,Map<Integer, Integer>>();
     public static Map<Integer, Map<Integer, Integer>>itemUsers = new HashMap<Integer, Map<Integer, Integer>>();
+
+    public static Map<Integer, Map<Float, Integer>>ratingHat = new HashMap<Integer, Map<Float,Integer>>();
+
     //  d = latent dimensions, T = iteration number
-    static final int d = 10, T = 100;
+    static final int d = 10, T = 500;
     //  n = users, m = items
     static final int n = 943, m = 1682;
+
+
 
     public static float[] itemBias = new float[m];
     public static float[][] matrixU = new float[n][d];
@@ -101,13 +107,13 @@ public class BPR {
         }
     }
 
-    float sigmoid(float f){
-    	return (float) (1/(1 + Math.pow(java.lang.Math.E, -1 * f)));
+    double sigmoid(Double f){
+    	return (1/(1 + Math.pow(java.lang.Math.E, -1 * f)));
     }
 
 	void doMainJob(){
 		double gamma = 0.01;
-        double alphaU = 0.01, alphaV = 0.01, betaU = 0.01, betaV = 0.01;
+        double alphaU = 0.01, alphaV = 0.01, betaV = 0.01;
 
         for(int i=0; i<T; ++i){
             for(int j=0; j<recordNum; ++j){
@@ -115,48 +121,78 @@ public class BPR {
                 //  randomly pick up a pair(u, i)∈R
                 int randomNum = (int) (Math.random() * recordNum);
                 int randomUser = userArr[randomNum];
-                int randomItem = itemArr[randomNum];
+                int randomItem_i = itemArr[randomNum];
 
                 //  randomly pick up an item j from I\Iu
-                Set<Integer>itemJSet = itemUsers.keySet();
-                itemJSet.retainAll((Collection<?>) userItems.get(randomUser));
-                Object[] itemJArr = itemJSet.toArray();
-                int randomItemJ = (int) itemJArr[(int) (Math.random() * itemJArr.length)];
+                Set<Integer>itemSet = itemUsers.keySet();
+                itemSet.retainAll((Collection<?>) userItems.get(randomUser));
+                Object[] itemJArr = itemSet.toArray();
+                int randomItem_j = (int) itemJArr[(int) (Math.random() * itemJArr.length)];
 
                 //  calculate the gradients
                 float uv = 0;
                 for(int k=0; k<d; ++k){
-                    uv += matrixU[randomUser -1][k] * matrixV[randomItem - 1][k];
+                    uv += matrixU[randomUser -1][k] * matrixV[randomItem_i - 1][k];
                 }
-                double ratingHat = globalAver + userBias[randomUser - 1] + itemBias[randomItem - 1] + uv;
-                double deltaGlobalAver = ratingHat - randomRating;
-                double deltaUserBias = deltaGlobalAver + betaU * userBias[randomUser - 1] ;
-                double deltaItemBias = deltaGlobalAver + betaV * itemBias[randomItem - 1];
-                Map<Integer, Double>deltaMatrixU = new HashMap<Integer, Double>(d);
+                double ratingHat_ui = uv + itemBias[randomItem_i-1];
+                uv = 0;
                 for(int k=0; k<d; ++k){
-                    deltaMatrixU.put(k, deltaGlobalAver * matrixV[randomItem - 1][k] + alphaU * matrixU[randomUser - 1][k]);
+                	uv += matrixU[randomUser-1][k] * matrixV[randomItem_j-1][k];
                 }
-                Map<Integer, Double>deltaMatrixV = new HashMap<Integer, Double>(d);
+                double ratingHat_uj = uv + itemBias[randomItem_j-1];
+                double ratingHat_uij = ratingHat_ui - ratingHat_uj;
+
+                double[] deltaMatrixU = new double[d];
+                double part1 = -1 * sigmoid(-1 * ratingHat_uij);
                 for(int k=0; k<d; ++k){
-                    deltaMatrixV.put(k, deltaGlobalAver * matrixU[randomUser - 1][k] + alphaV * matrixV[randomItem - 1][k]);
+                    deltaMatrixU[k] = part1 * (matrixV[randomItem_i-1][k] - matrixV[randomItem_j-1][k])
+                    		+ alphaU * matrixU[randomUser-1][k];
+                }
+                double[] deltaMatrixV_i = new double[d];
+                for(int k=0; k<d; ++k){
+                    deltaMatrixV_i[k] = part1 * matrixU[randomUser-1][k] + alphaV * matrixV[randomItem_i-1][k];
                 }
 
-                //  update parameters
-                globalAver -= gamma * deltaGlobalAver;
-                userBias[randomUser - 1] = (float) (userBias[randomUser - 1] - gamma * deltaUserBias);
-                itemBias[randomItem - 1] = (float) (itemBias[randomItem - 1] - gamma * deltaItemBias);
+                double[] deltaMatrixV_j = new double[d];
                 for(int k=0; k<d; ++k){
-                    double tempU = matrixU[randomUser - 1][k];
-                    double tempV = matrixV[randomItem - 1][k];
-                    matrixU[randomUser - 1][k] =  (float) (tempU - gamma * deltaMatrixU.get(k));
-                    matrixV[randomItem - 1][k] = (float) (tempV - gamma * deltaMatrixV.get(k));
+                    deltaMatrixV_j[k] = -1 * part1 * matrixU[randomUser-1][k] + alphaV * matrixV[randomItem_j-1][k];
+                }
+
+                double deltaItemBias_i = part1 + betaV * itemBias[randomItem_i-1];
+                double deltaItemBias_j = -1 * part1 + betaV * itemBias[randomItem_j-1];
+
+                //  update parameters
+
+                itemBias[randomItem_i - 1] -= gamma * deltaItemBias_i;
+                itemBias[randomItem_i - 1] -= gamma * deltaItemBias_j;
+                for(int k=0; k<d; ++k){
+                    matrixU[randomUser - 1][k] -= gamma * deltaMatrixU[k];
+                    matrixV[randomItem_i - 1][k] -= gamma * deltaMatrixV_i[k];
+                    matrixV[randomItem_j - 1][k] -= gamma * deltaMatrixV_j[k];
                 }
             }
-            gamma *= 0.9;
         }
 	}
 
+	void getPrediction(){
+		for(Entry<Integer, Map<Integer, Integer>> e : userItems.entrySet()){
+			if(!ratingHat.containsKey(e.getKey())){
+				ratingHat.put(e.getKey(), new TreeMap<Float, Integer>());
+			}
+			for(Entry<Integer, Map<Integer, Integer>> ee : itemUsers.entrySet()){
+				float uv = 0;
+				for(int k=0; k<d; ++k){
+					uv += matrixU[e.getKey()-1][k] + matrixV[ee.getKey()-1][k];
+				}
+				float raingHat_ui = uv + itemBias[ee.getKey()-1];
+				if()
+			}
+		}
+	}
 
+	void  evalutionMetrics(){
+
+	}
 
 
 

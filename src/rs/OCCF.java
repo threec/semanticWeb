@@ -63,35 +63,37 @@ public class OCCF {
 
 	void getSimilarity(){
 
-		Set<Integer>intersection = new HashSet<Integer>();  //  交集
-		Set<Integer>unionSet = new HashSet<Integer>();	//  并集
-
 		for(Entry<Integer, Set<Integer>> e : itemUsers.entrySet()){
-			intersection.clear();
-			unionSet.clear();
-
-			intersection.addAll(e.getValue());
+			
+			Set<Integer>itemUserSet_k = e.getValue();
 
 			for(Entry<Integer, Set<Integer>> ee : itemUsers.entrySet()){
 				if(e.getKey().equals(ee.getKey())){
 					continue;
 				}
 				//  获得交集
-				intersection.retainAll(ee.getValue());
+				Set<Integer>intersection = new HashSet<Integer>();
+				for(Integer i : itemUserSet_k){
+					if(ee.getValue().contains(i)){
+						intersection.add(i);
+					}
+				}
 
 				//  交集为空的话就跳过，不为空则加入
 				if(intersection.isEmpty()){
 					continue;
 				}
-
+				//System.out.println(intersection.size());
+				
 				if(!itemSimilarity.containsKey(e.getKey())){
 					itemSimilarity.put(e.getKey(), new HashMap<Integer, Float>());
 				}
 
 				//  获得并集
+				Set<Integer>unionSet = new HashSet<Integer>();
 				unionSet.addAll(e.getValue());
 				unionSet.addAll(ee.getValue());
-
+				
 				itemSimilarity.get(e.getKey()).put(ee.getKey(), (float) ((double)intersection.size()/unionSet.size()));
 			}
 		}
