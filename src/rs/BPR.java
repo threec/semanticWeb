@@ -17,6 +17,7 @@ import java.util.Vector;
 
 public class BPR {
 
+<<<<<<< Updated upstream
 	private static Map<Integer, Set<Integer>>userItems = new HashMap<Integer, Set<Integer>>();
 	private static Map<Integer, Set<Integer>>itemUsers = new HashMap<Integer, Set<Integer>>();
 	
@@ -62,6 +63,85 @@ public class BPR {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
+=======
+	//  (user, preferred items), (item, preferred users)
+	public static Map<Integer, Set<Integer>> userItems = new HashMap<>();
+	public static Map<Integer, Set<Integer>> itemUsers = new HashMap<>();
+	
+    public static Map<Integer, Map<Float, Integer>>ratingHat = new HashMap<Integer, Map<Float,Integer>>();
+
+    //  d = latent dimensions, T = iteration number
+    static final int d = 10, T = 500;
+    //  n = users, m = items
+    static final int n = 943, m = 1682;
+    static final int pre_k = 5;
+
+
+    public static float[] itemBias = new float[m];
+    public static float[][] matrixU = new float[n][d];
+    public static float[][] matrixV = new float[m][d];
+
+    public static int[] userArr;
+    public static int[] itemArr;
+
+    int recordNum = 0;
+    float μ;
+
+    //  read file and initialization of modal parameters
+    void init(String fileName){
+        try {
+            //  read file
+            BufferedReader reader = new BufferedReader(new FileReader(new File(fileName)));
+            String lineString;
+            String[] userStrings;
+            int[] userIntegers;
+
+            while((lineString = reader.readLine()) != null){
+				userStrings = lineString.split("[^0-9]");
+				userIntegers = new int[2];
+				for(int i=0; i<2; ++i){
+					userIntegers[i] = Integer.valueOf(userStrings[i]);
+				}
+
+				if(!userItems.containsKey(userIntegers[0])){
+					userItems.put(userIntegers[0], new HashSet<Integer>());
+				}
+				userItems.get(userIntegers[0]).add(userIntegers[1]);
+
+
+				if(!itemUsers.containsKey(userIntegers[1])){
+					itemUsers.put(userIntegers[1], new HashSet<Integer>());
+				}
+				itemUsers.get(userIntegers[1]).add(userIntegers[0]);
+				
+                recordNum++;
+
+            }/*  end of reading file */
+            reader.close();
+
+            μ = (float)recordNum/n/m;
+
+            userArr = new int[recordNum];
+            itemArr = new int[recordNum];
+
+            //  get item bias and initialize matrix item(matrixV)
+            for(Entry<Integer, Set<Integer>> e : itemUsers.entrySet()){
+
+                itemBias[e.getKey() - 1] = (float) (e.getValue().size()/n) - μ;
+
+                //  initialize matrix item
+                for(int k=0; k<d; ++k){
+                    matrixV[e.getKey() - 1][k] = (float) ((float) (Math.random() - 0.5) * 0.01);
+                }
+            }
+            int index = 0;
+            for(Entry<Integer, Set<Integer>> e : userItems.entrySet()){
+
+				for(Integer ee : e.getValue()){
+
+                    userArr[index] = e.getKey();
+            		itemArr[index] = ee;
+>>>>>>> Stashed changes
 
 			//  use the statistics of training data to initialize the modal parameters
 			miu = (float)recordNum/n/m;
@@ -115,6 +195,7 @@ public class BPR {
 
 				assert randomSetItem_j.size() == itemUsers.size()-userItems.get(random_u).size();
 
+<<<<<<< Updated upstream
 				random_u--;
 				random_i--;
 
@@ -162,10 +243,71 @@ public class BPR {
 				itemBias[random_j] -= gamma * deltaItemBias_j;
 			}
 		}
+=======
+        for(int i=0; i<T; ++i){
+            for(int j=0; j<recordNum; ++j){
+
+                //  randomly pick up a pair(u, i)∈R
+                int randomNum = (int) (Math.random() * recordNum);
+                int randomUser = userArr[randomNum];
+                int randomItem_i = itemArr[randomNum];
+
+                //  randomly pick up an item j from I\Iu
+                Set<Integer>itemSet = itemUsers.keySet();
+                itemSet.retainAll((Set) userItems.get(randomUser));
+                Object[] itemJArr = itemSet.toArray();
+                System.out.println(itemJArr.length);
+                int randomItem_j = (int) itemJArr[(int) (Math.random() * itemJArr.length)];
+
+                //  calculate the gradients
+                float uv = 0;
+                for(int k=0; k<d; ++k){
+                    uv += matrixU[randomUser -1][k] * matrixV[randomItem_i - 1][k];
+                }
+                double ratingHat_ui = uv + itemBias[randomItem_i-1];
+                uv = 0;
+                for(int k=0; k<d; ++k){
+                	uv += matrixU[randomUser-1][k] * matrixV[randomItem_j-1][k];
+                }
+                double ratingHat_uj = uv + itemBias[randomItem_j-1];
+                double ratingHat_uij = ratingHat_ui - ratingHat_uj;
+
+                double[] deltaMatrixU = new double[d];
+                double part1 = -1 * sigmoid(-1 * ratingHat_uij);
+                for(int k=0; k<d; ++k){
+                    deltaMatrixU[k] = part1 * (matrixV[randomItem_i-1][k] - matrixV[randomItem_j-1][k])
+                    		+ alphaU * matrixU[randomUser-1][k];
+                }
+                double[] deltaMatrixV_i = new double[d];
+                for(int k=0; k<d; ++k){
+                    deltaMatrixV_i[k] = part1 * matrixU[randomUser-1][k] + alphaV * matrixV[randomItem_i-1][k];
+                }
+
+                double[] deltaMatrixV_j = new double[d];
+                for(int k=0; k<d; ++k){
+                    deltaMatrixV_j[k] = -1 * part1 * matrixU[randomUser-1][k] + alphaV * matrixV[randomItem_j-1][k];
+                }
+
+                double deltaItemBias_i = part1 + betaV * itemBias[randomItem_i-1];
+                double deltaItemBias_j = -1 * part1 + betaV * itemBias[randomItem_j-1];
+
+                //  update parameters
+
+                itemBias[randomItem_i - 1] -= gamma * deltaItemBias_i;
+                itemBias[randomItem_i - 1] -= gamma * deltaItemBias_j;
+                for(int k=0; k<d; ++k){
+                    matrixU[randomUser - 1][k] -= gamma * deltaMatrixU[k];
+                    matrixV[randomItem_i - 1][k] -= gamma * deltaMatrixV_i[k];
+                    matrixV[randomItem_j - 1][k] -= gamma * deltaMatrixV_j[k];
+                }
+            }
+        }
+>>>>>>> Stashed changes
 	}
 
 	void getPrediction(){
 		for(Entry<Integer, Set<Integer>> e : userItems.entrySet()){
+<<<<<<< Updated upstream
 			
 			if(!ratingHat.containsKey(e.getKey())){
 				ratingHat.put(e.getKey(), new TreeMap<Float, Integer>());
@@ -176,6 +318,12 @@ public class BPR {
 				if(e.getValue().contains(item)){
 					continue;
 				}
+=======
+			if(!ratingHat.containsKey(e.getKey())){
+				ratingHat.put(e.getKey(), new TreeMap<Float, Integer>());
+			}
+			for(Entry<Integer, Set<Integer>> ee : itemUsers.entrySet()){
+>>>>>>> Stashed changes
 				float uv = 0;
 				for(int i=0; i<d; ++i){
 					uv += matrixU[e.getKey()-1][i] * matrixV[item-1][i];
@@ -189,10 +337,27 @@ public class BPR {
 					((TreeMap<Float, Integer>) ratingHat.get(e.getKey())).pollFirstEntry();
 					ratingHat.get(e.getKey()).put(curPrediction, item);
 				}
+<<<<<<< Updated upstream
+=======
+				Float ratingHat_ui = uv + itemBias[ee.getKey()-1];
+				
+				if(ratingHat.get(e.getKey()).size() < pre_k){
+					ratingHat.get(e.getKey()).put(ratingHat_ui, ee.getKey());
+				}
+				else{
+					if(ratingHat_ui.compareTo(
+							((TreeMap<Float, Integer>) ratingHat.get(e.getKey())).firstEntry().getKey()
+							) > 0){
+						((TreeMap<Float, Integer>) ratingHat.get(e.getKey())).pollFirstEntry();
+						ratingHat.get(e.getKey()).put(ratingHat_ui, ee.getKey());
+					}
+				}
+>>>>>>> Stashed changes
 			}
 			System.out.println(ratingHat.get(e.getKey()));
 		}
 	}
+<<<<<<< Updated upstream
 	
 	void evaluationMertrics(String testFile){
 		try {
@@ -260,6 +425,65 @@ public class BPR {
         endTime = System.currentTimeMillis();
         System.out.println("running time :" + (endTime - startTime)/1000.0 + "s" );
 
+=======
+
+	void  evalutionMetrics(String testFile){
+		try {
+			BufferedReader reader = new BufferedReader(new FileReader(new File(testFile)));
+			Map<Integer, Set<Integer>>userTest = new HashMap<Integer, Set<Integer>>();
+ 			String lineString;
+			String[] userStrings;
+			int[] userIntegers;
+			float preSum = 0;
+			try {
+				while((lineString = reader.readLine()) != null){
+					userStrings = lineString.split("[^0-9]");
+					userIntegers = new int[2];
+					for(int i=0; i<2; ++i){
+						userIntegers[i] = Integer.valueOf(userStrings[i]);
+					}
+					if(!userTest.containsKey(userIntegers[0])){
+						userTest.put(userIntegers[0], new HashSet<Integer>());
+					}
+					userTest.get(userIntegers[0]).add(userIntegers[1]);
+				}
+				reader.close();
+				for( Entry<Integer, Set<Integer>> e : userTest.entrySet()){
+					
+					if(ratingHat.containsKey(e.getKey())){
+						
+						float tempSum = 0;
+						for( Integer ee : ratingHat.get(e.getKey()).values()){
+							if(e.getValue().contains(ee)){
+								tempSum++;
+							}
+						}
+						preSum += tempSum/pre_k;
+					}
+				}
+				//System.out.println(preSum);
+				System.out.println("Pre@k : " + (float)preSum/userTest.size());			
+				
+			} catch (IOException e) {			
+				e.printStackTrace();
+			}
+		} catch (FileNotFoundException e) {			
+			e.printStackTrace();
+		}
+	}
+
+
+
+	public static void main(String[] args) {
+		BPR test = new BPR();
+		long startTime = System.currentTimeMillis();
+		test.init("u1.base.OCCF");
+		test.doMainJob();
+		test.getPrediction();
+		test.evalutionMetrics("u1.test.OCCF");
+		long endTime = System.currentTimeMillis();
+        System.out.println("running time :" + (endTime - startTime)/1000.0 + "s" );
+>>>>>>> Stashed changes
 	}
 
 }
